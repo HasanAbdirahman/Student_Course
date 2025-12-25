@@ -39,14 +39,14 @@ jobs:
 
       - name: Push Frontend Docker Image
         run: |
-          cd frontend
+          cd Frontend
           docker build --cache-from $DOCKERHUB_USERNAME/frontend-repo:${GITHUB_SHA} \
           -t hasanAbdirahman/frontend-repo:${GITHUB_SHA} .
           docker push hasanAbdirahman/frontend-repo:${GITHUB_SHA}
 
       - name: Install dependencies and build frontend
         run: |
-          cd frontend
+          cd Frontend
           npm install
           npm run build
 
