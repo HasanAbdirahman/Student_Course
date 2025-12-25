@@ -1,0 +1,71 @@
+name: Full Infrastructure and App Deployment
+
+# on:
+#   push:
+#     branches:
+#       - main
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  app:
+    name: Kubernetes App Deployment
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push Backend Docker Image
+        run: |
+          cd backend
+          docker build --cache-from $DOCKERHUB_USERNAME/backend-repo:${GITHUB_SHA} \
+          -t hasanAbdirahman/backend-repo:${GITHUB_SHA} .
+          docker push hasanAbdirahman/backend-repo:${GITHUB_SHA}
+
+      - name: Push Frontend Docker Image
+        run: |
+          cd frontend
+          docker build --cache-from $DOCKERHUB_USERNAME/frontend-repo:${GITHUB_SHA} \
+          -t hasanAbdirahman/frontend-repo:${GITHUB_SHA} .
+          docker push hasanAbdirahman/frontend-repo:${GITHUB_SHA}
+
+      - name: Install dependencies and build frontend
+        run: |
+          cd frontend
+          npm install
+          npm run build
+
+      - name: Install dependencies and build backend
+        run: |
+          cd backend
+          node server.js
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Update GitOps Repo
+        run: |
+          git clone git@github.com:org/gitops-repo.git
+          cd gitops-repo/apps/dev/myapp
+          sed -i 's|image: .*|image: <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/myapp:${GITHUB_SHA}|' deployment.yaml
+          git commit -am "Deploy ${GITHUB_SHA}"
+          git push
