@@ -26,7 +26,8 @@ jobs:
       # ---------- FRONTEND ----------
       - name: Build frontend image
         run: |
-          docker build -t $DOCKERHUB_USERNAME/frontend-student:$IMAGE_TAG ./frontend
+          docker build --build-arg REACT_APP_API_URL=http://backend-service:5000 \
+          -t $DOCKERHUB_USERNAME/frontend-student:$IMAGE_TAG ./frontend
           docker push $DOCKERHUB_USERNAME/frontend-student:$IMAGE_TAG
 
       # ---------- BACKEND ----------
