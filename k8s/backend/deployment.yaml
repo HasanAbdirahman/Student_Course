@@ -1,39 +1,65 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
-  name: backend-deployment
+  name: mysql
   namespace: backend
 spec:
+  serviceName: mysql
   replicas: 1
   selector:
     matchLabels:
-      app: backend
+      app: mysql
   template:
     metadata:
       labels:
-        app: backend
+        app: mysql
     spec:
       containers:
-        - name: backend
-          image: hasanAbdirahman/backend-repo:REPLACE_ME
-          imagePullPolicy: Always
+        - name: mysql
+          image: mysql:8.0
           ports:
-            - containerPort: 8080
+            - containerPort: 3306
+
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_DATABASE
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_PASSWORD
+
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+
           resources:
             requests:
-              memory: "100Mi"
-              cpu: "250m"
-            limits:
-              memory: "300Mi"
+              memory: "256Mi"
               cpu: "500m"
-          env:
-            - name: DB_HOST
-              value: mysql-service
-            - name: DB_PORT
-              value: "3306"
-            - name: DB_USER
-              value: root
-            - name: DB_PASSWORD
-              value: ""
-            - name: DB_NAME
-              value: university_db
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+
+  volumeClaimTemplates:
+    - metadata:
+        name: mysql-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi

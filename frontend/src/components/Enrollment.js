@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import API from "../api";
+import "./Enrollment.css";
 
 export default function Enrollment() {
   const [students, setStudents] = useState([]);
@@ -13,33 +14,51 @@ export default function Enrollment() {
   }, []);
 
   const enroll = async () => {
+    if (!studentId || !courseId) {
+      alert("Please select both student and course");
+      return;
+    }
+
     await API.post("/enrollments", {
       student_id: studentId,
       course_id: courseId,
     });
-    alert("Enrolled successfully");
+
+    alert("Student enrolled successfully");
+    setStudentId("");
+    setCourseId("");
   };
 
   return (
-    <div>
-      <h3>Enroll Student</h3>
-      <select onChange={(e) => setStudentId(e.target.value)}>
-        <option>Select Student</option>
-        {students.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.name}
-          </option>
-        ))}
-      </select>
-      <select onChange={(e) => setCourseId(e.target.value)}>
-        <option>Select Course</option>
-        {courses.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.title}
-          </option>
-        ))}
-      </select>
-      <button onClick={enroll}>Enroll</button>
+    <div className="container">
+      <div className="card">
+        <h3>Enroll Student</h3>
+
+        <select
+          value={studentId}
+          onChange={(e) => setStudentId(e.target.value)}
+        >
+          <option value="">Select Student</option>
+          {students.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+
+        <select value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+          <option value="">Select Course</option>
+          {courses.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.title}
+            </option>
+          ))}
+        </select>
+
+        <button className="enroll-btn" onClick={enroll}>
+          Enroll
+        </button>
+      </div>
     </div>
   );
 }

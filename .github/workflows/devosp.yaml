@@ -1,28 +1,21 @@
-name: Full Infrastructure and App Deployment
-
-# on:
-#   push:
-#     branches:
-#       - main
+name: Build and Deploy Apps
 
 on:
   pull_request:
     branches:
       - main
 
+env:
+  DOCKERHUB_USERNAME: hasanAbdirahman
+  IMAGE_TAG: ${{ github.sha }}
+
 jobs:
-  app:
-    name: Kubernetes App Deployment
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repo
         uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
 
       - name: Login to Docker Hub
         uses: docker/login-action@v2
@@ -30,42 +23,28 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push Backend Docker Image
+      # ---------- FRONTEND ----------
+      - name: Build frontend image
         run: |
-          cd backend
-          docker build --cache-from $DOCKERHUB_USERNAME/backend-repo:${GITHUB_SHA} \
-          -t hasanAbdirahman/backend-repo:${GITHUB_SHA} .
-          docker push hasanAbdirahman/backend-repo:${GITHUB_SHA}
+          docker build -t $DOCKERHUB_USERNAME/frontend-student:$IMAGE_TAG ./frontend
+          docker push $DOCKERHUB_USERNAME/frontend-student:$IMAGE_TAG
 
-      - name: Push Frontend Docker Image
+      # ---------- BACKEND ----------
+      - name: Build backend image
         run: |
-          cd Frontend
-          docker build --cache-from $DOCKERHUB_USERNAME/frontend-repo:${GITHUB_SHA} \
-          -t hasanAbdirahman/frontend-repo:${GITHUB_SHA} .
-          docker push hasanAbdirahman/frontend-repo:${GITHUB_SHA}
+          docker build -t $DOCKERHUB_USERNAME/backend-student:$IMAGE_TAG ./backend
+          docker push $DOCKERHUB_USERNAME/backend-student:$IMAGE_TAG
 
-      - name: Install dependencies and build frontend
+      # ---------- UPDATE K8S MANIFESTS ----------
+      - name: Update Kubernetes manifests
         run: |
-          cd Frontend
-          npm install
-          npm run build
+          sed -i "s|REPLACE_ME|$IMAGE_TAG|g" k8s/frontend/deployment.yaml
+          sed -i "s|REPLACE_ME|$IMAGE_TAG|g" k8s/backend/deployment.yaml
 
-      - name: Install dependencies and build backend
+      - name: Commit and push changes
         run: |
-          cd backend
-          node server.js
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v3
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Update GitOps Repo
-        run: |
-          git clone git@github.com:org/gitops-repo.git
-          cd gitops-repo/apps/dev/myapp
-          sed -i 's|image: .*|image: <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/myapp:${GITHUB_SHA}|' deployment.yaml
-          git commit -am "Deploy ${GITHUB_SHA}"
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add k8s
+          git commit -m "Deploy images $IMAGE_TAG"
           git push
