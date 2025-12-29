@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  DOCKERHUB_USERNAME: hasanAbdirahman
+  DOCKERHUB_USERNAME: hasanabdirahman
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
