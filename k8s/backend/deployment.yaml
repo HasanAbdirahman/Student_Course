@@ -1,10 +1,10 @@
+---
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
   name: mysql
   namespace: backend
 spec:
-  serviceName: mysql
   replicas: 1
   selector:
     matchLabels:
@@ -19,33 +19,11 @@ spec:
           image: mysql:8.0
           ports:
             - containerPort: 3306
-
           env:
             - name: MYSQL_ROOT_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: mysql-secret
-                  key: MYSQL_ROOT_PASSWORD
+              value: ""
             - name: MYSQL_DATABASE
-              valueFrom:
-                secretKeyRef:
-                  name: mysql-secret
-                  key: MYSQL_DATABASE
-            - name: MYSQL_USER
-              valueFrom:
-                secretKeyRef:
-                  name: mysql-secret
-                  key: MYSQL_USER
-            - name: MYSQL_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: mysql-secret
-                  key: MYSQL_PASSWORD
-
-          volumeMounts:
-            - name: mysql-data
-              mountPath: /var/lib/mysql
-
+              value: university_db
           resources:
             requests:
               memory: "256Mi"
@@ -53,13 +31,3 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "1000m"
-
-  volumeClaimTemplates:
-    - metadata:
-        name: mysql-data
-      spec:
-        accessModes:
-          - ReadWriteOnce
-        resources:
-          requests:
-            storage: 5Gi
