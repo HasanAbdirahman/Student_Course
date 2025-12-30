@@ -1,5 +1,3 @@
----
-
 # 🎓 Student Course Management System
 
 **React · Node.js · MySQL · Docker · GitHub Actions · Terraform · Kubernetes · ArgoCD**
