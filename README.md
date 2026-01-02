@@ -1,4 +1,4 @@
-# 🎓 Student Course Management System
+<!-- # 🎓 Student Course Management System
 
 **React · Node.js · MySQL · Docker · GitHub Actions · Terraform · Kubernetes · ArgoCD**
 
@@ -357,4 +357,257 @@ EKS Cluster
 - Easy to explain in interviews
 - Production-aligned design
 
+--- -->
+
+Perfect — now we’re aligned.
+Below is a **clean, recruiter-ready `README.md` rewritten strictly based on Mohammed’s advice**, **nothing extra**, nothing misleading, and matching what you actually built.
+
+This version focuses on:
+
+- Clear **business purpose**
+- **Architecture explanation**
+- **Step-by-step how to run**
+- **CI/CD clarity**
+- **Security honesty**
+- **Visual diagram usage**
+
+You can copy-paste this directly as your `README.md`.
+
 ---
+
+```md
+# Student Course Management – DevOps Project
+
+This repository demonstrates an **end-to-end DevOps workflow** for deploying a simple Student Course Management application using modern cloud and DevOps tools.
+
+The primary goal of this project is to showcase **CI/CD, Infrastructure as Code, Kubernetes, and GitOps principles**, rather than application complexity.
+
+Recruiters and reviewers should be able to understand the system in **2–3 minutes**.
+
+---
+
+## Project Overview
+
+The application allows:
+
+- Managing students
+- Managing courses
+- Enrolling students in courses
+
+From a DevOps perspective, this project demonstrates:
+
+- Containerized frontend and backend services
+- Automated Docker image builds using GitHub Actions
+- Infrastructure provisioning with Terraform
+- Kubernetes deployments on AWS EKS
+- GitOps-based continuous delivery using Argo CD
+
+---
+
+## Architecture Diagram
+
+![Architecture Diagram](Student%20Course%20Diagram%20Flow.png)
+
+### High-Level Flow
+
+1. Developer pushes code to GitHub
+2. GitHub Actions builds Docker images for frontend and backend
+3. Images are pushed to Docker Hub
+4. Kubernetes manifests are stored in GitHub
+5. Argo CD (running inside EKS) watches the repository
+6. Argo CD syncs and deploys the application to Kubernetes
+
+---
+
+## Technologies Used
+
+- **Frontend:** React, Axios
+- **Backend:** Node.js, Express
+- **Database:** MySQL
+- **Containerization:** Docker
+- **CI:** GitHub Actions
+- **CD (GitOps):** Argo CD
+- **Infrastructure as Code:** Terraform
+- **Orchestration:** Kubernetes (EKS)
+- **Cloud Provider:** AWS
+
+---
+
+## Repository Structure
+```
+
+Student_Course/
+├── frontend/ # React frontend application
+├── backend/ # Node.js / Express API
+├── k8s/ # Kubernetes manifests
+│ ├── frontend/
+│ ├── backend/
+│ └── mysql/
+├── terraform/ # AWS EKS infrastructure (Terraform)
+├── .github/workflows/ # GitHub Actions CI pipelines
+├── Student Course Diagram Flow.png
+└── README.md
+
+````
+
+---
+
+## CI/CD Pipeline
+
+### Continuous Integration (GitHub Actions)
+
+GitHub Actions is responsible for **CI only**.
+
+The pipeline:
+- Builds Docker images for frontend and backend
+- Tags images using the Git commit SHA
+- Pushes images to Docker Hub
+
+> The pipeline does **not** run Terraform and does **not** deploy to Kubernetes directly.
+> Deployment is handled via GitOps using Argo CD.
+
+---
+
+## Infrastructure Provisioning (Terraform)
+
+Terraform is used to provision AWS infrastructure, including:
+- VPC
+- EKS Cluster
+- IAM roles and permissions
+
+### Provision Infrastructure
+
+From the `terraform/` directory:
+
+```bash
+terraform init
+terraform plan
+terraform apply
+````
+
+After this step:
+
+- The EKS cluster is created
+- `kubectl` can connect to the cluster
+
+---
+
+## Argo CD (GitOps Deployment)
+
+Argo CD is installed **inside the EKS cluster** and continuously monitors this GitHub repository.
+
+### Install Argo CD
+
+```bash
+kubectl create namespace argocd
+
+kubectl apply -n argocd \
+  -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+```
+
+### What Argo CD Does
+
+- Watches Kubernetes manifests in GitHub
+- Detects changes automatically
+- Syncs Deployments and Services into the cluster
+- Ensures the cluster state matches Git
+
+This follows a **GitOps deployment model**.
+
+---
+
+## Kubernetes Deployment
+
+Kubernetes manifests define:
+
+- Frontend Deployment and Service
+- Backend Deployment and Service
+- MySQL Deployment and Service
+- Kubernetes Secrets for configuration
+
+Apply manifests manually or allow Argo CD to sync them:
+
+```bash
+kubectl apply -f k8s/
+```
+
+---
+
+## Secrets Management
+
+Database credentials are managed using **Kubernetes Secrets**.
+
+### Notes
+
+- `stringData` is used in Secrect file for readability
+- Kubernetes automatically encodes secrets internally
+- No credentials are hardcoded in application code
+
+> In a production environment, secrets would typically be managed using AWS Secrets Manager or SSM.
+> For this portfolio project, Kubernetes Secrets are sufficient.
+
+---
+
+## Running the Application Locally (Optional)
+
+### Backend
+
+```bash
+cd backend
+npm install
+npm start
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm start
+```
+
+A local MySQL instance is required for local development only.
+
+---
+
+## Monitoring & Observability (Future Improvement)
+
+Basic monitoring and logging (CloudWatch, Prometheus, or ELK) can be added as an enhancement.
+This project focuses primarily on **deployment automation and GitOps**.
+
+---
+
+## Security Considerations
+
+- No credentials are committed in source code
+- GitHub Secrets are used in CI pipelines
+- Kubernetes Secrets are used for runtime configuration
+- `.gitignore` prevents sensitive files from being committed
+
+---
+
+## Key DevOps Concepts Demonstrated
+
+- CI vs CD separation
+- Containerized microservices
+- Infrastructure as Code
+- Kubernetes application deployment
+- GitOps workflow using Argo CD
+- Secure configuration management
+
+---
+
+## Author
+
+**Hasan Abdirahman**
+Cloud / DevOps Engineer
+
+GitHub: [https://github.com/HasanAbdirahman](https://github.com/HasanAbdirahman)
+LinkedIn: [https://www.linkedin.com/in/hasanabdirahman](https://www.linkedin.com/in/hasanabdirahman)
+
+```
+
+---
+
+
+```
