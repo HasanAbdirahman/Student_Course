@@ -359,23 +359,6 @@ EKS Cluster
 
 --- -->
 
-Perfect — now we’re aligned.
-Below is a **clean, recruiter-ready `README.md` rewritten strictly based on Mohammed’s advice**, **nothing extra**, nothing misleading, and matching what you actually built.
-
-This version focuses on:
-
-- Clear **business purpose**
-- **Architecture explanation**
-- **Step-by-step how to run**
-- **CI/CD clarity**
-- **Security honesty**
-- **Visual diagram usage**
-
-You can copy-paste this directly as your `README.md`.
-
----
-
-```md
 # Student Course Management – DevOps Project
 
 This repository demonstrates an **end-to-end DevOps workflow** for deploying a simple Student Course Management application using modern cloud and DevOps tools.
@@ -433,22 +416,38 @@ From a DevOps perspective, this project demonstrates:
 
 ---
 
-## Repository Structure
+## 📁 Repository Structure
+
 ```
-
-Student_Course/
-├── frontend/ # React frontend application
-├── backend/ # Node.js / Express API
-├── k8s/ # Kubernetes manifests
-│ ├── frontend/
-│ ├── backend/
-│ └── mysql/
-├── terraform/ # AWS EKS infrastructure (Terraform)
-├── .github/workflows/ # GitHub Actions CI pipelines
-├── Student Course Diagram Flow.png
+.
+├── .github/workflows/devops.yaml     # CI: build & push Docker images
+│
+├── argocd/app/
+│   ├── backend-deploy.yaml           # ArgoCD Application (backend)
+│   └── frontend-deploy.yaml          # ArgoCD Application (frontend)
+│
+├── backend/                           # Node.js API
+├── frontend/                          # React app
+│
+├── k8s/
+│   ├── backend/
+│   │   ├── deployment.yaml            # Backend Deployment
+│   │   ├── service.yaml               # Backend Service
+│   │   ├── mysql-statefulset.yaml     # MySQL StatefulSet
+│   │   ├── mysql-service.yaml         # MySQL Service
+│   │   └── pvc.yaml                   # PersistentVolumeClaim (MySQL)
+│   │
+│   └── frontend/
+│       ├── deployment.yaml            # Frontend Deployment
+│       └── service.yaml               # Frontend Service
+│
+├── terraform/
+│   ├── main.tf
+│   ├── variables.tf
+│   └── outputs.tf
+│
 └── README.md
-
-````
+```
 
 ---
 
@@ -459,6 +458,7 @@ Student_Course/
 GitHub Actions is responsible for **CI only**.
 
 The pipeline:
+
 - Builds Docker images for frontend and backend
 - Tags images using the Git commit SHA
 - Pushes images to Docker Hub
@@ -471,6 +471,7 @@ The pipeline:
 ## Infrastructure Provisioning (Terraform)
 
 Terraform is used to provision AWS infrastructure, including:
+
 - VPC
 - EKS Cluster
 - IAM roles and permissions
@@ -483,7 +484,7 @@ From the `terraform/` directory:
 terraform init
 terraform plan
 terraform apply
-````
+```
 
 After this step:
 
