@@ -632,6 +632,23 @@ You do **not** manually create a PV in EKS.
 
 ---
 
+---
+
+## 🌐 Frontend → Backend Communication (Kubernetes)
+
+Inside Kubernetes:
+
+```js
+REACT_APP_API_URL=http://backend-service:5000
+```
+
+Why this works:
+
+- `backend-service` is a Kubernetes Service
+- Kubernetes DNS resolves it automatically
+
+---
+
 ## Monitoring & Observability (Future Improvement)
 
 Basic monitoring and logging (CloudWatch, Prometheus, or ELK) can be added as an enhancement.
