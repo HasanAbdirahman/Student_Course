@@ -679,5 +679,5 @@ This project focuses primarily on **deployment automation and GitOps**.
 **Hasan Abdirahman**
 Cloud / DevOps Engineer
 
-GitHub: [https://github.com/HasanAbdirahman](https://github.com/HasanAbdirahman)
-LinkedIn: [https://www.linkedin.com/in/hasanabdirahman](https://www.linkedin.com/in/hasanabdirahman)
+GitHub: [Link](https://github.com/HasanAbdirahman) \
+LinkedIn: [Link](https://www.linkedin.com/in/hasanabdirahman)
