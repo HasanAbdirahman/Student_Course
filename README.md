@@ -361,11 +361,11 @@ EKS Cluster
 
 # Student Course Management – DevOps Project
 
+Project Overview
+
 This repository demonstrates an **end-to-end DevOps workflow** for deploying a simple Student Course Management application using modern cloud and DevOps tools.
 
 The primary goal of this project is to showcase **CI/CD, Infrastructure as Code, Kubernetes, and GitOps principles**, rather than application complexity.
-
-Recruiters and reviewers should be able to understand the system in **2–3 minutes**.
 
 ---
 
@@ -497,13 +497,39 @@ After this step:
 
 Argo CD is installed **inside the EKS cluster** and continuously monitors this GitHub repository.
 
-### Install Argo CD
+### Important Concept
+
+> ArgoCD runs **inside the EKS cluster**, but you install it using `kubectl` from your local machine.
+
+### 1️⃣ Connect kubectl to EKS
+
+```bash
+aws eks update-kubeconfig \
+  --region us-east-1 \
+  --name main_devops-cluster
+```
+
+"main_devops-cluster" is the name of the cluster created
+
+Verify:
+
+```bash
+kubectl get nodes
+```
+
+### 2️⃣ Install ArgoCD using the shell that used to create EKS (VSCode or EC2 Instance Shell)
 
 ```bash
 kubectl create namespace argocd
 
 kubectl apply -n argocd \
   -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+```
+
+Verify:
+
+```bash
+kubectl get pods -n argocd
 ```
 
 ### What Argo CD Does
@@ -516,6 +542,13 @@ kubectl apply -n argocd \
 This follows a **GitOps deployment model**.
 
 ---
+
+## Deploy Apps with ArgoCD
+
+```bash
+kubectl apply -f argocd/app/backend-deploy.yaml
+kubectl apply -f argocd/app/frontend-deploy.yaml
+```
 
 ## Kubernetes Deployment
 
@@ -571,6 +604,34 @@ A local MySQL instance is required for local development only.
 
 ---
 
+## 🗄 MySQL, StatefulSet & PVC (Important)
+
+### Why a PVC is Needed
+
+- MySQL stores data on disk
+- Pods can restart or move nodes
+- Without a PVC → **data is lost**
+
+### How It Works
+
+```
+StatefulSet (MySQL)
+        |
+        v
+PersistentVolumeClaim (pvc.yaml)
+        |
+        v
+PersistentVolume (AWS EBS gp3)
+```
+
+- The PVC is defined in `k8s/backend/pvc.yaml`
+- Kubernetes automatically provisions an **EBS volume**
+- Data survives pod restarts
+
+You do **not** manually create a PV in EKS.
+
+---
+
 ## Monitoring & Observability (Future Improvement)
 
 Basic monitoring and logging (CloudWatch, Prometheus, or ELK) can be added as an enhancement.
@@ -605,10 +666,3 @@ Cloud / DevOps Engineer
 
 GitHub: [https://github.com/HasanAbdirahman](https://github.com/HasanAbdirahman)
 LinkedIn: [https://www.linkedin.com/in/hasanabdirahman](https://www.linkedin.com/in/hasanabdirahman)
-
-```
-
----
-
-
-```
