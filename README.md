@@ -632,8 +632,6 @@ You do **not** manually create a PV in EKS.
 
 ---
 
----
-
 ## 🌐 Frontend → Backend Communication (Kubernetes)
 
 Inside Kubernetes:
