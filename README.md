@@ -361,7 +361,7 @@ EKS Cluster
 
 # Student Course Management – DevOps Project
 
-Project Overview
+## Project Overview
 
 This repository demonstrates an **end-to-end DevOps workflow** for deploying a simple Student Course Management application using modern cloud and DevOps tools.
 
