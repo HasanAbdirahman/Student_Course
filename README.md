@@ -584,15 +584,54 @@ Database credentials are managed using **Kubernetes Secrets**.
 
 ## Running the Application Locally (Optional)
 
-### Backend
+This is **only for development**.
+Local MySQL (XAMPP) is **not used in Kubernetes**.
+
+### Requirements
+
+- Node.js
+- MySQL (XAMPP or local MySQL)
+
+### 1️⃣ Create Database & Tables
+
+```sql
+CREATE DATABASE university_db;
+USE university_db;
+
+CREATE TABLE students (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255),
+  email VARCHAR(255)
+);
+
+CREATE TABLE courses (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(255),
+  credits INT
+);
+
+CREATE TABLE enrollments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  student_id INT,
+  course_id INT
+);
+```
+
+### 2️⃣ Backend
 
 ```bash
 cd backend
 npm install
-npm start
+node server.js
 ```
 
-### Frontend
+Runs at:
+
+```
+http://localhost:5000
+```
+
+### 3️⃣ Frontend
 
 ```bash
 cd frontend
@@ -600,7 +639,17 @@ npm install
 npm start
 ```
 
-A local MySQL instance is required for local development only.
+Runs at:
+
+```
+http://localhost:3000
+```
+
+Frontend talks to backend using:
+
+```js
+REACT_APP_API_URL=http://localhost:5000
+```
 
 ---
 
