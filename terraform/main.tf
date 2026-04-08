@@ -151,6 +151,9 @@ resource "aws_security_group" "main_devops_node_sg" {
   # cidr_blocks = ["YOUR_PUBLIC_IP/32"]
   # this is the best practice using 
   # your public ip is the laptop ip
+  #  need your public IP first. Run this in PowerShell:
+
+ # (Invoke-WebRequest -Uri "https://ifconfig.me/ip").Content.Trim()
 
   egress {
     from_port   = 0
