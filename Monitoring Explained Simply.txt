@@ -1,4 +1,4 @@
- Monitoring Explained Simply 
+ Monitoring Explained Simply by Hasan 
 
   Think of monitoring like a hospital for your application. Doctors need
   machines to check your heart rate, temperature, and blood pressure.
