@@ -1,0 +1,362 @@
+ ---
+  The Full Flow Explained
+
+  Step 1 — You push code to GitHub
+
+  Your laptop → git push → GitHub
+
+  Step 2 — GitHub Actions builds your Docker images
+
+  backend/  →  docker build  →  hasanabdirahman/backend-student:abc123
+  frontend/ →  docker build  →  hasanabdirahman/frontend-student:abc123
+  Two Docker images are created, each tagged with the commit SHA
+  (abc123).
+
+  Step 3 — Trivy scans the images
+
+  If any CRITICAL vulnerability is found, the pipeline stops here.
+  Nothing gets pushed.
+
+  Step 4 — Images are pushed to Docker Hub
+
+  Docker Hub:
+    hasanabdirahman/backend-student:abc123   ✅
+    hasanabdirahman/frontend-student:abc123  ✅
+
+  Step 5 — CI updates the k8s manifest files
+
+  k8s/backend/deployment.yaml
+    image: hasanabdirahman/backend-student:REPLACE_ME
+                                            ↓
+    image: hasanabdirahman/backend-student:abc123   ← updated
+
+  k8s/frontend/deployment.yaml
+    image: hasanabdirahman/frontend-student:REPLACE_ME
+                                             ↓
+    image: hasanabdirahman/frontend-student:abc123  ← updated
+
+  Step 6 — CI commits those changes back to GitHub
+
+  GitHub now has the updated manifest files with the new image tag
+
+  Step 7 — ArgoCD detects the change
+
+  ArgoCD is running inside EKS and watches the GitHub repo every few
+  seconds. It sees the manifest changed.
+
+  Step 8 — ArgoCD pulls the new image and redeploys
+
+  ArgoCD tells Kubernetes:
+    "The backend deployment should now use image tag abc123"
+
+  Kubernetes:
+    → pulls hasanabdirahman/backend-student:abc123 from Docker Hub
+    → starts a new backend pod with the new image
+    → waits for readinessProbe (/health) to pass
+    → kills the old pod
+    → same for frontend
+
+  Step 9 — MySQL is untouched
+
+  MySQL runs as a StatefulSet with a PVC (persistent disk). It never
+  gets redeployed by the CI pipeline — only app code changes trigger
+  new deployments.
+
+  ---
+  Before the Fix vs After
+
+  ┌──────────────────────────────┬───────────────┬─────────────────┐
+  │                              │    Before     │      After      │
+  ├──────────────────────────────┼───────────────┼─────────────────┤
+  │ k8s/backend/deployment.yaml  │ Had MySQL     │ Has backend     │
+  │                              │ (wrong)       │ Node.js app     │
+  ├──────────────────────────────┼───────────────┼─────────────────┤
+  │ k8s/frontend/deployment.yaml │ Had hardcoded │ Has REPLACE_ME  │
+  │                              │  old SHA      │ placeholder     │
+  ├──────────────────────────────┼───────────────┼─────────────────┤
+  │                              │ Built and     │                 │
+  │ Backend Docker image         │ pushed but    │ Now deployed to │
+  │                              │ never         │  EKS            │
+  │                              │ deployed      │                 │
+  ├──────────────────────────────┼───────────────┼─────────────────┤
+  │                              │               │ Added           │
+  │ mysql-secret.yaml            │ No JWT_SECRET │ JWT_SECRET      │
+  │                              │               │ (backend needs  │
+  │                              │               │ it at runtime)  │
+  └──────────────────────────────┴───────────────┴─────────────────┘
+
+✻ Brewed for 30s
+
+> the secret.yaml file in the backend what do I need to change it
+
+● You need to replace the three REPLACE_WITH_REAL_* values with actual
+  passwords before applying it to the cluster.
+
+  Here's what to change:
+
+  stringData:
+    MYSQL_ROOT_PASSWORD: MyRootPass123!       # any strong password for
+   MySQL root admin
+    MYSQL_DATABASE: university_db             # leave this as is
+    MYSQL_USER: appuser                       # leave this as is
+    MYSQL_PASSWORD: MyAppPass123!             # any strong password for
+   the app user
+    JWT_SECRET: some_long_random_string_here  # any long random string
+  for signing tokens
+
+  Rules for choosing values:
+  - MYSQL_ROOT_PASSWORD — strong password, you'll rarely use this
+  directly
+  - MYSQL_USER and MYSQL_DATABASE — leave them as is, the backend is
+  already configured to use these names
+  - MYSQL_PASSWORD — strong password, this is what your Node.js backend
+   uses to connect
+  - JWT_SECRET — should be a long random string, not a real word.
+  Example: k9$Xp2mQr8vLnZ4wYdB7cHjF1uA6eT3s
+
+  Then apply it:
+  kubectl apply -f k8s/backend/mysql-secret.yaml
+
+  Never commit the file with real values — it's in .gitignore for
+  exactly this reason. The file in the repo will always have the
+  REPLACE_WITH_REAL_* placeholders, and you fill in the real values
+  only on the machine where you run kubectl apply.
+
+> please explain the flow of the things in this project
+
+● Complete Project Flow
+
+  ---
+  1. Infrastructure — Built Once with Terraform
+
+  Before anything runs, you provision the cloud infrastructure:
+
+  Your laptop
+      │
+      └── terraform apply
+                │
+                ▼
+           AWS creates:
+           - VPC (the private network)
+           - EKS Cluster (Kubernetes on AWS)
+           - 3 worker nodes (t3.medium EC2 machines)
+           - EBS CSI driver (so Kubernetes can create disks)
+
+  This only runs once. After this your Kubernetes cluster exists and is
+   ready.
+
+  ---
+  2. One-Time Kubernetes Setup
+
+  After the cluster exists, you set up the tools inside it once:
+
+  kubectl apply → ArgoCD installed in EKS
+               → monitoring namespace created
+               → kube-prometheus-stack installed (Prometheus + Grafana
+  + AlertManager)
+               → mysql-secret.yaml applied (your real passwords)
+               → ArgoCD ApplicationSet applied (tells ArgoCD what to
+  watch)
+
+  After this ArgoCD is running inside your cluster, watching your
+  GitHub repo, waiting for changes.
+
+  ---
+  3. Developer Pushes Code — The CI Pipeline Kicks In
+
+  You write code on your laptop
+      │
+      └── git push → GitHub (main branch)
+                          │
+                          ▼
+                 GitHub Actions starts:
+
+                 Step 1: Build Docker images locally
+                         backend/  → image: backend-student:abc123
+                         frontend/ → image: frontend-student:abc123
+
+                 Step 2: Trivy scans both images
+                         CRITICAL vulnerability found? → pipeline
+  STOPS, nothing pushed
+                         All clear? → continue
+
+                 Step 3: Push images to Docker Hub
+                         hasanabdirahman/backend-student:abc123  ✅
+                         hasanabdirahman/frontend-student:abc123 ✅
+
+                 Step 4: Update k8s manifest files
+                         k8s/backend/deployment.yaml  → REPLACE_ME
+  becomes abc123
+                         k8s/frontend/deployment.yaml → REPLACE_ME
+  becomes abc123
+
+                 Step 5: Commit those manifest files back to GitHub
+
+                 Step 6: Clean up old Docker Hub images (keep last 5)
+
+  ---
+  4. ArgoCD Sees the Change — The CD Pipeline Kicks In
+
+  GitHub repo now has updated manifests (image tag: abc123)
+      │
+      └── ArgoCD detects the difference every few seconds
+                          │
+                          ▼
+                 ArgoCD tells Kubernetes:
+                 "Pull backend-student:abc123 from Docker Hub and run
+  it"
+                 "Pull frontend-student:abc123 from Docker Hub and run
+  it"
+                          │
+                          ▼
+                 Kubernetes:
+                 - Downloads the new images from Docker Hub
+                 - Starts new pods with new images
+                 - Waits for /health to return OK (readinessProbe)
+                 - Kills the old pods
+                 - Zero downtime rollout complete
+
+  ---
+  5. What's Running Inside Kubernetes
+
+  Once deployed, this is what lives inside your EKS cluster:
+
+  EKS Cluster
+  │
+  ├── namespace: frontend
+  │     └── Frontend Pod (React app served by Nginx)
+  │               - Security headers on every response
+  │               - Talks to backend via http://backend-service
+  │
+  ├── namespace: backend
+  │     ├── Backend Pod (Node.js / Express API)
+  │     │         - JWT authentication on all routes
+  │     │         - Exposes /health (for probes)
+  │     │         - Exposes /metrics (for Prometheus)
+  │     │         - Connects to MySQL using credentials from
+  mysql-secret
+  │     │
+  │     ├── MySQL StatefulSet
+  │     │         - Stores all data (students, courses, enrollments,
+  users)
+  │     │         - Data saved on EBS disk (survives pod restarts)
+  │     │
+  │     └── mysql-secret
+  │               - Holds all passwords + JWT secret
+  │               - Never committed to GitHub
+  │
+  └── namespace: monitoring
+        ├── Prometheus   → scrapes /metrics from backend every 15s
+        ├── Grafana      → displays charts from Prometheus data
+        └── AlertManager → sends alerts when things go wrong
+
+  ---
+  6. A User Opens the App
+
+  User opens browser
+      │
+      └── hits Frontend Pod (Nginx serves the React app)
+                  │
+                  │  user logs in
+                  ▼
+           React sends POST /auth/login → Backend Pod
+                  │
+                  │  backend checks credentials in MySQL
+                  │  MySQL confirms password matches
+                  │  backend returns JWT token
+                  ▼
+           React stores token in localStorage
+                  │
+                  │  user views students list
+                  ▼
+           React sends GET /students (with JWT token in header)
+                  │
+                  │  backend middleware verifies the token
+                  │  backend queries MySQL
+                  │  returns list of students
+                  ▼
+           React displays the list
+
+  ---
+  7. Monitoring Watching in the Background
+
+  Every 15 seconds:
+      Prometheus → visits backend /metrics
+                → records: request counts, response times, error rates
+
+  Every moment:
+      Winston   → logs every request as JSON
+                → logs every error with full stack trace
+
+  When something breaks:
+      Error rate crosses 5%  → AlertManager fires HighErrorRate alert
+      Pod keeps crashing     → AlertManager fires PodCrashLooping alert
+      Response time > 2s     → AlertManager fires HighLatency alert
+                │
+                ▼
+           You get a Slack/email notification
+           You open Grafana, see the charts, find the problem
+
+  ---
+  The Big Picture in One Diagram
+
+    You write code
+         │
+         ▼
+     GitHub ──── GitHub Actions ────► Docker Hub
+         │              │                  │
+         │         (Trivy scan)            │
+         │              │                  │
+         │         update manifests        │
+         │              │                  │
+         ▼              ▼                  │
+     ArgoCD ──── detects change            │
+         │                                 │
+         ▼                                 ▼
+    Kubernetes ◄──────── pulls image ─── Docker Hub
+         │
+         ├── Frontend Pod
+         ├── Backend Pod ◄── Prometheus scrapes /metrics
+         └── MySQL StatefulSet (EBS disk)
+
+  ---
+  Summary of Each Tool's Job
+
+  ┌───────────────┬────────────────────────────────────────────────┐
+  │     Tool      │                      Job                       │
+  ├───────────────┼────────────────────────────────────────────────┤
+  │ Terraform     │ Builds the AWS infrastructure once             │
+  ├───────────────┼────────────────────────────────────────────────┤
+  │ Docker        │ Packages your app into portable images         │
+  ├───────────────┼────────────────────────────────────────────────┤
+  │ GitHub        │ Builds, scans, and pushes images automatically │
+  │ Actions       │  on every push                                 │
+  ├───────────────┼────────────────────────────────────────────────┤
+  │ Trivy         │ Checks images for security vulnerabilities     │
+  │               │ before they reach production                   │
+  ├───────────────┼────────────────────────────────────────────────┤
+  │ Docker Hub    │ Stores your Docker images                      │
+  ├───────────────┼────────────────────────────────────────────────┤
+  │ ArgoCD        │ Watches GitHub and keeps Kubernetes in sync    │
+  │               │ automatically                                  │
+  ├───────────────┼────────────────────────────────────────────────┤
+  │ Kubernetes    │ Runs your containers, restarts them if they    │
+  │               │ crash, manages networking                      │
+  ├───────────────┼────────────────────────────────────────────────┤
+  │ mysql-secret  │ Stores all sensitive credentials safely inside │
+  │               │  the cluster                                   │
+  ├───────────────┼────────────────────────────────────────────────┤
+  │ JWT           │ Proves a user is logged in on every API        │
+  │               │ request                                        │
+  ├───────────────┼────────────────────────────────────────────────┤
+  │ Winston       │ Writes structured logs so you can read what    │
+  │               │ happened                                       │
+  ├───────────────┼────────────────────────────────────────────────┤
+  │ Prometheus    │ Collects numbers (metrics) from your app over  │
+  │               │ time                                           │
+  ├───────────────┼────────────────────────────────────────────────┤
+  │ Grafana       │ Turns those numbers into visual charts         │
+  ├───────────────┼────────────────────────────────────────────────┤
+  │ AlertManager  │ Sends you a notification when something goes   │
+  │               │ wrong                                          │
+  └───────────────┴────────────────────────────────────────────────┘

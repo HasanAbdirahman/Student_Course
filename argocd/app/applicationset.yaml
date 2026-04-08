@@ -1,0 +1,46 @@
+# Single ApplicationSet replaces backend-deploy.yaml and frontend-deploy.yaml.
+# To change the repo URL, update repoURL in one place here instead of each app file.
+#
+# Apply with:
+#   kubectl apply -f argocd/app/applicationset.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: student-course
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - app: backend
+            path: k8s/backend
+            namespace: backend
+            repoURL: https://github.com/HasanAbdirahman/Student_Course.git
+          - app: frontend
+            path: k8s/frontend
+            namespace: frontend
+            repoURL: https://github.com/HasanAbdirahman/Student_Course.git
+          - app: backend-staging
+            path: k8s/staging
+            namespace: staging
+            repoURL: https://github.com/HasanAbdirahman/Student_Course.git
+
+  template:
+    metadata:
+      name: "{{app}}"
+    spec:
+      project: default
+      source:
+        repoURL: "{{repoURL}}"
+        targetRevision: main
+        path: "{{path}}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{namespace}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
