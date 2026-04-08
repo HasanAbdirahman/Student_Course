@@ -146,7 +146,7 @@ resource "aws_security_group" "main_devops_node_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["YOUR_PUBLIC_IP/32"]
+    cidr_blocks = ["99.246.139.252/32"]
   }
   # cidr_blocks = ["YOUR_PUBLIC_IP/32"]
   # this is the best practice using 
