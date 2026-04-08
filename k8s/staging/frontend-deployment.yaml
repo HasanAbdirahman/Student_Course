@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: hasanabdirahman/frontend-student:REPLACE_ME
+          image: hasanabdirahman/frontend-student:3a474e60fd2ca8dd0ff036e5ef6eb5f0da3c249a
           imagePullPolicy: Always
           ports:
             - containerPort: 80
