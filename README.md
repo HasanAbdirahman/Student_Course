@@ -64,7 +64,7 @@ flowchart TD
 
 | Area | Implementation |
 |---|---|
-| **CI/CD** | GitHub Actions — build, Trivy scan, push, manifest update, image cleanup |
+| **CI/CD** | GitHub Actions — test, build, Trivy scan, push, manifest update, image cleanup |
 | **GitOps** | ArgoCD ApplicationSet — auto-sync, self-heal, staging + production |
 | **Infrastructure as Code** | Terraform — VPC, EKS, IAM, EBS CSI driver |
 | **Security** | JWT auth, bcrypt, Nginx security headers, secret management, CORS lockdown |
@@ -101,6 +101,11 @@ flowchart TD
 │   │   ├── students.js              # CRUD /students (protected)
 │   │   ├── courses.js               # CRUD /courses (protected)
 │   │   └── enrollments.js           # CRUD /enrollments (protected)
+│   ├── tests/
+│   │   ├── auth.test.js             # Register + login route tests
+│   │   ├── students.test.js         # Student CRUD + ownership enforcement tests
+│   │   ├── courses.test.js          # Course CRUD + ownership enforcement tests
+│   │   └── enrollments.test.js      # Enrollment create, get, delete tests
 │   ├── db.js                        # mysql2/promise connection pool
 │   ├── db-init.sql                  # One-time schema setup script
 │   ├── logger.js                    # Winston JSON logger
@@ -111,8 +116,11 @@ flowchart TD
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── Login.js             # Login / Register form
+│   │   │   ├── Login.test.js
 │   │   │   ├── StudentForm.js
+│   │   │   ├── StudentForm.test.js
 │   │   │   ├── CourseForm.js
+│   │   │   ├── CourseForm.test.js
 │   │   │   └── Enrollment.js        # Enroll + unenroll with current enrollment list
 │   │   ├── api.js                   # Axios instance with JWT interceptors
 │   │   └── App.js                   # Auth guard + logout
@@ -171,6 +179,10 @@ npm start
 The pipeline in `.github/workflows/devops.yaml` runs on pushes to `main` and `staging` branches.
 
 ```
+Run backend + frontend unit tests
+(failing test blocks the pipeline — nothing is built or deployed)
+       │
+       ▼
 Build images locally
        │
        ▼
@@ -192,6 +204,8 @@ Cleanup old Docker Hub tags (keep last 5)
 ```
 
 **Required GitHub Secrets:** `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`
+
+> `JWT_SECRET` is not a GitHub secret — it lives only inside the Kubernetes cluster as part of `mysql-secret` and is injected into the backend pod at runtime.
 
 ---
 
@@ -263,11 +277,12 @@ kubectl apply -f k8s/backend/mysql-secret.yaml
 | Layer | What was done |
 |---|---|
 | **Authentication** | JWT-based login/register. All `/students`, `/courses`, `/enrollments` routes require a valid Bearer token. |
+| **Authorization** | Users can only edit or delete their own student and course records. Enforced on the backend with a 403 response — not just hidden in the UI. |
 | **Passwords** | Hashed with bcrypt (10 rounds) — plain passwords are never stored. |
 | **CORS** | Restricted to origins defined in `ALLOWED_ORIGINS` env var. |
 | **Nginx** | Custom `nginx.conf` adds X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, and Content-Security-Policy headers. |
 | **Secrets** | `mysql-secret.yaml` is gitignored — only placeholder values exist in the repo. |
-| **JWT secret** | Set via `JWT_SECRET` env var. Never hardcoded. |
+| **JWT secret** | Set via `JWT_SECRET` env var injected from Kubernetes secret at runtime. Never hardcoded in the codebase or committed to git. |
 
 ---
 
