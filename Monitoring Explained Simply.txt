@@ -1,0 +1,194 @@
+ Monitoring Explained Simply by Hasan 
+
+  Think of monitoring like a hospital for your application. Doctors need
+  machines to check your heart rate, temperature, and blood pressure.
+  Monitoring tools do the same for your app.
+
+  ---
+  The Problem Without Monitoring
+
+  Your app is running in Kubernetes. Something goes wrong at 3am. Users
+  complain. You log in and see... nothing. You have no idea:
+  - When did it break?
+  - Was it slow before it crashed?
+  - Which part failed — frontend, backend, or database?
+  - Is it still broken right now?
+
+  Monitoring solves all of this.
+
+  ---
+  The Three Tools We Added
+
+  1. Winston — The Diary
+	Written in the Express Backend Side
+
+  Every time something happens in your backend, Winston writes it down in
+   a notebook (the logs).
+
+  Without Winston:
+  Server running on port 5000
+  Just plain text. Useless when searching through thousands of lines.
+
+  With Winston:
+  { "level": "info", "timestamp": "2026-04-06T10:23:01Z", "message":
+  "POST /auth/login 200 45ms" }
+  { "level": "error", "timestamp": "2026-04-06T10:24:15Z", "message":
+  "Database connection failed", "stack": "Error at db.js:12..." }
+  Now every log has a timestamp, a level (info/error), and structured
+  data you can search and filter.
+
+  Think of it as: every event in your app gets written in a diary with
+  the exact time and details.
+
+  ---
+  2. Prometheus — The Fitness Tracker
+
+  Winston writes text logs. But logs don't easily answer questions like:
+  - How many requests per second is my app getting?
+  - What percentage of requests are failing?
+  - How slow is my app right now?
+
+  That's what Prometheus does. It's like a fitness tracker that counts
+  numbers over time.
+
+  We added a /metrics endpoint to the backend. Every 15 seconds,
+  Prometheus visits that URL and collects numbers like:
+
+  http_requests_total{method="POST", route="/students",
+  status_code="201"} = 143
+  http_requests_total{method="POST", route="/students",
+  status_code="500"} = 3
+  http_request_duration_seconds{route="/students", le="0.1"} = 98
+
+  Translation:
+  - 143 successful student creations
+  - 3 failed ones (errors)
+  - 98% of them completed in under 0.1 seconds
+
+  Think of it as: a fitness tracker counting your steps, heart rate, and
+  calories — but for your app.
+
+  ---
+  3. Grafana — The Dashboard Screen
+
+  Prometheus stores the numbers. But raw numbers are hard to read.
+  Grafana turns them into visual charts and graphs on a dashboard.
+
+  You open Grafana in your browser and see:
+
+  📈 Requests per minute:    [graph going up and down]
+  📉 Error rate:             [should stay near 0%]
+  ⏱  Average response time:  [should stay under 200ms]
+  💻 CPU usage:              [should stay under 80%]
+
+  Think of it as: the screen in a hospital showing your heart rate as a
+  moving line instead of just a number.
+
+  ---
+  4. AlertManager — The Alarm System
+
+  Grafana shows you charts. But you can't stare at charts 24/7.
+  AlertManager sends you a notification when something goes wrong.
+
+  We defined 4 rules:
+
+  ┌─────────────────┬─────────────────────────────────────────────────┐
+  │      Rule       │         What it means in plain English          │
+  ├─────────────────┼─────────────────────────────────────────────────┤
+  │ PodCrashLooping │ "Your app keeps crashing and restarting —       │
+  │                 │ something is seriously wrong"                   │
+  ├─────────────────┼─────────────────────────────────────────────────┤
+  │ PodNotReady     │ "Your app stopped responding for more than 2    │
+  │                 │ minutes"                                        │
+  ├─────────────────┼─────────────────────────────────────────────────┤
+  │ HighErrorRate   │ "More than 5% of requests are failing right     │
+  │                 │ now"                                            │
+  ├─────────────────┼─────────────────────────────────────────────────┤
+  │ HighLatency     │ "Your app is taking more than 2 seconds to      │
+  │                 │ respond to most requests"                       │
+  └─────────────────┴─────────────────────────────────────────────────┘
+
+  When any of these trigger, AlertManager can send a message to Slack,
+  email, or PagerDuty.
+
+  Think of it as: the alarm that goes off in the hospital when a
+  patient's heart rate drops too low.
+
+  ---
+  How They All Connect
+
+  Your App (backend)
+        │
+        │  writes logs
+        ▼
+     Winston ──────────────────► Log files / CloudWatch
+        │
+        │  exposes numbers at /metrics
+        ▼
+    Prometheus ──── scrapes every 15s ────► stores numbers over time
+        │
+        ├──────────────────────────────────► Grafana (draws charts)
+        │
+        └──────────────────────────────────► AlertManager (sends alarms)
+
+  ---
+  Step by Step — What Happens on a Normal Day
+
+  1. A user logs in. Your backend handles the request.
+  2. Winston writes: POST /auth/login 200 - 43ms
+  3. Prometheus visits /metrics 15 seconds later and records that one
+  more login happened in 43ms.
+  4. Grafana updates the "requests per minute" chart on the dashboard.
+  5. Nothing is wrong. AlertManager stays quiet.
+
+  ---
+  Step by Step — What Happens When Something Breaks
+
+  1. Your database goes down.
+  2. Every API request starts returning a 500 error.
+  3. Winston starts logging: "level": "error", "message": "Database
+  connection failed"
+  4. Prometheus collects the new numbers — suddenly status_code="500"
+  counter is climbing fast.
+  5. Within 3 minutes the error rate crosses 5%.
+  6. AlertManager fires the HighErrorRate alert.
+  7. You get a Slack message at 3am: "High 5xx error rate on backend —
+  12% of requests are failing"
+  8. You wake up, fix the database, alert resolves automatically.
+
+  Without monitoring, you'd only find out when users start complaining —
+  maybe hours later.
+
+  ---
+  How to Install It (The Practical Part)
+
+  Everything is already written in the code. You just need to run three
+  commands after your EKS cluster is running:
+
+  Step 1 — Install Prometheus + Grafana + AlertManager with one command:
+  helm repo add prometheus-community
+  https://prometheus-community.github.io/helm-charts
+  helm repo update
+  helm upgrade --install kube-prometheus-stack
+  prometheus-community/kube-prometheus-stack \
+    --namespace monitoring --create-namespace \
+    -f k8s/monitoring/helm-values.yaml
+  This installs all three tools into your cluster in the monitoring
+  namespace.
+
+  Step 2 — Tell Prometheus where to find your backend:
+  kubectl apply -f k8s/monitoring/servicemonitor.yaml
+  This is the instruction that says "go scrape the backend at /metrics
+  every 15 seconds".
+
+  Step 3 — Load the alert rules:
+  kubectl apply -f k8s/monitoring/alertmanager-rules.yaml
+  This loads the 4 rules that trigger alarms.
+
+  Step 4 — Open Grafana in your browser:
+  kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n
+  monitoring
+  Then go to http://localhost:3000. Default login is admin / the password
+   you set in helm-values.yaml.
+
+  That's the entire monitoring stack running.

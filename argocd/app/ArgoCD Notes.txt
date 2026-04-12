@@ -1,0 +1,127 @@
+
+● ArgoCD Notes
+
+  ---
+  What is ArgoCD
+
+  A Continuous Delivery (CD) tool that deploys to Kubernetes automatically by
+   watching a git repo. It does not build code, run tests, or push images —
+  that is the CI job.
+
+  ---
+  CI vs CD in your project
+
+  ┌─────────────┬──────────────────────────────────┬─────────────────────┐
+  │             │       GitHub Actions (CI)        │     ArgoCD (CD)     │
+  ├─────────────┼──────────────────────────────────┼─────────────────────┤
+  │ Triggered   │ Code push                        │ Git manifest change │
+  │ by          │                                  │                     │
+  ├─────────────┼──────────────────────────────────┼─────────────────────┤
+  │ Job         │ Build, push image, update        │ Deploy to           │
+  │             │ manifest                         │ Kubernetes          │
+  ├─────────────┼──────────────────────────────────┼─────────────────────┤
+  │ Knows about │ Docker Hub                       │ Kubernetes cluster  │
+  └─────────────┴──────────────────────────────────┴─────────────────────┘
+
+  ---
+  Core idea — Git as source of truth
+
+  ArgoCD constantly compares:
+
+  - What git says should be running (your k8s/ manifests)
+  - What is actually running in the cluster
+
+  If they differ → ArgoCD syncs the cluster to match git.
+
+  ---
+  Self-healing
+
+  If someone manually changes something in the cluster (scales a deployment,
+  edits a config), ArgoCD reverts it back to what git says. The cluster
+  always reflects git, nothing else.
+
+  ---
+  The full flow
+
+  1. You push code to main
+  2. GitHub Actions builds & pushes Docker image
+  3. GitHub Actions updates the image tag in k8s/ manifest
+  4. GitHub Actions commits that back to git
+  5. ArgoCD detects the git change
+  6. ArgoCD applies the new manifest to Kubernetes
+  7. New pods roll out, old ones terminate
+
+  ---
+  ApplicationSet vs Application
+
+  - Application — one ArgoCD app, defined manually
+  - ApplicationSet — one file that generates multiple apps from a template,
+  your project uses this to manage backend, frontend, and backend-staging
+  from a single place
+
+  ---
+  Key settings in your ApplicationSet
+
+  automated:
+    prune: true      # if you delete a resource from git, ArgoCD deletes it
+  from cluster too
+    selfHeal: true   # if cluster drifts from git, ArgoCD corrects it
+  automatically
+  syncOptions:
+    - CreateNamespace=true  # ArgoCD creates the namespace if it doesn't
+  exist
+
+
+
+REMEMBER GITHUB ACTION IGNORES THE K8S/** FOLDER INORDER TO PREVENT INFINITE LOOP SO THIS IS WHAT HAPPENS
+
+Why GitHub Actions skips k8s/ changes
+
+  on:
+    push:
+      branches: [main]
+      paths-ignore:
+        - 'k8s/**'
+
+  This prevents an infinite loop:
+  CI commits k8s/ change → triggers CI again → commits again → triggers again
+   → forever
+
+  ---
+  So who picks up the k8s/ change?
+
+  ArgoCD does.
+
+  You push k8s/ change to main
+          │
+          │  GitHub Actions sees it → SKIPS (paths-ignore)
+          │
+          └→ ArgoCD sees it → DEPLOYS to Kubernetes
+
+  ArgoCD is always watching git every few seconds regardless of who made the
+  commit — you, GitHub Actions, anyone.
+
+  ---
+  The two scenarios
+
+  Scenario 1
+ — You push app code
+   code change → GitHub Actions runs → builds image →
+   updates k8s/ manifest → commits → ArgoCD deploys
+
+  Scenario 2
+ — You push k8s/ change directly
+   k8s/ change → GitHub Actions skips →
+   ArgoCD sees it → deploys
+
+  Both end with ArgoCD doing the actual deployment. GitHub Actions never
+  touches the cluster directly.
+
+  ---
+  The key insight
+
+  GitHub Actions and ArgoCD never step on each other:
+  - GitHub Actions owns the image building
+  - ArgoCD owns the deploying
+  - Git is the handoff point between them
+

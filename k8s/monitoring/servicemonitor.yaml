@@ -1,0 +1,23 @@
+# Tells Prometheus (installed via kube-prometheus-stack) to scrape
+# the backend /metrics endpoint every 15 seconds.
+#
+# Requires: kube-prometheus-stack installed (see helm-values.yaml)
+
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: backend-monitor
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack   # must match the Helm release name
+spec:
+  namespaceSelector:
+    matchNames:
+      - backend
+  selector:
+    matchLabels:
+      app: backend
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

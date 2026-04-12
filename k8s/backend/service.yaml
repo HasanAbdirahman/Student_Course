@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: backend
+  labels:
+    app: backend          # ServiceMonitor selects on this label
+spec:
+  selector:
+    app: backend
+  ports:
+    - name: http          # name required for ServiceMonitor to reference it
+      port: 80
+      targetPort: 5000
+  type: ClusterIP

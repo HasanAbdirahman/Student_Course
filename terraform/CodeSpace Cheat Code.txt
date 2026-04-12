@@ -1,0 +1,41 @@
+ Codespaces Cheat Sheet — Student Course App
+
+  1. Start MySQL
+  sudo apt update
+  sudo apt install mysql-server -y
+  sudo service mysql start
+  sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH
+  mysql_native_password BY ''; FLUSH PRIVILEGES;"
+  sudo mysql -u root < backend/db-init.sql
+
+  2. Get your Codespace URLs
+
+  echo "Backend: https://${CODESPACE_NAME}-5000.app.github.dev"
+  echo "Frontend: https://${CODESPACE_NAME}-3000.app.github.dev"
+
+  3. Make ports public
+
+  gh codespace ports visibility 5000:public
+  gh codespace ports visibility 3000:public
+
+  4. Start backend (Terminal 1)
+
+  cd backend
+  ALLOWED_ORIGINS=https://${CODESPACE_NAME}-3000.app.github.dev \
+  JWT_SECRET=any_local_secret \
+  node server.js
+
+  5. Start frontend (Terminal 2)
+
+  cd frontend
+  export REACT_APP_API_URL=https://${CODESPACE_NAME}-5000.app.github.dev
+  npm start
+
+  6. Hard refresh browser
+
+  Ctrl + Shift + R after frontend compiles.
+
+  ---
+
+  ▎ Note: $CODESPACE_NAME is auto-set by Codespaces (e.g.
+  ▎ bug-free-waffle-9r649xrw959399w7) — no need to type it manually.

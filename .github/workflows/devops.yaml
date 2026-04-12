@@ -1,0 +1,136 @@
+name: Build and Deploy Apps
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+    paths-ignore:
+      - "k8s/**"   # prevent infinite loop when CI commits updated manifests
+
+permissions:
+  contents: write
+
+env:
+  DOCKERHUB_USERNAME: hasanabdirahman
+  IMAGE_TAG: ${{ github.sha }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  # ────────────────────────────────────────────────
+  # 1. BUILD → SCAN → PUSH
+  # ────────────────────────────────────────────────
+  build-scan-push:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # ── Build images locally (not pushed yet) ──
+      - name: Build frontend image
+        run: |
+          docker build \
+            --build-arg REACT_APP_API_URL=http://backend-service:5000 \
+            -t $DOCKERHUB_USERNAME/frontend-student:$IMAGE_TAG \
+            ./frontend
+
+      - name: Build backend image
+        run: |
+          docker build \
+            -t $DOCKERHUB_USERNAME/backend-student:$IMAGE_TAG \
+            ./backend
+
+      # ── Scan with Trivy — fail on CRITICAL vulnerabilities ──
+      - name: Scan frontend image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.DOCKERHUB_USERNAME }}/frontend-student:${{ env.IMAGE_TAG }}
+          format: table
+          exit-code: 1
+          severity: CRITICAL
+
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.DOCKERHUB_USERNAME }}/backend-student:${{ env.IMAGE_TAG }}
+          format: table
+          exit-code: 1
+          severity: CRITICAL
+
+      # ── Push only after scans pass ──
+      - name: Push frontend image
+        run: docker push $DOCKERHUB_USERNAME/frontend-student:$IMAGE_TAG
+
+      - name: Push backend image
+        run: docker push $DOCKERHUB_USERNAME/backend-student:$IMAGE_TAG
+
+      # ── Update the correct k8s manifests based on branch ──
+      - name: Update production manifests
+        if: github.ref == 'refs/heads/main'
+        run: |
+          sed -i "s|image: $DOCKERHUB_USERNAME/frontend-student:.*|image: $DOCKERHUB_USERNAME/frontend-student:$IMAGE_TAG|g" k8s/frontend/deployment.yaml
+          sed -i "s|image: $DOCKERHUB_USERNAME/backend-student:.*|image: $DOCKERHUB_USERNAME/backend-student:$IMAGE_TAG|g" k8s/backend/deployment.yaml
+
+      - name: Update staging manifests
+        if: github.ref == 'refs/heads/staging'
+        run: |
+          sed -i "s|image: $DOCKERHUB_USERNAME/frontend-student:.*|image: $DOCKERHUB_USERNAME/frontend-student:$IMAGE_TAG|g" k8s/staging/frontend-deployment.yaml
+          sed -i "s|image: $DOCKERHUB_USERNAME/backend-student:.*|image: $DOCKERHUB_USERNAME/backend-student:$IMAGE_TAG|g" k8s/staging/backend-deployment.yaml
+
+      - name: Commit and push manifest changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            git add k8s/frontend/deployment.yaml k8s/backend/deployment.yaml
+          else
+            git add k8s/staging/frontend-deployment.yaml k8s/staging/backend-deployment.yaml
+          fi
+
+          git commit -m "chore: deploy images $IMAGE_TAG [skip ci]" || echo "No changes to commit"
+          git push
+
+  # ────────────────────────────────────────────────
+  # 2. CLEAN UP OLD IMAGES (runs after push succeeds)
+  # ────────────────────────────────────────────────
+  cleanup-old-images:
+    runs-on: ubuntu-latest
+    needs: build-scan-push
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Delete old Docker Hub tags (keep last 5 per image)
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          TOKEN=$(curl -s -X POST "https://hub.docker.com/v2/users/login/" \
+            -H "Content-Type: application/json" \
+            -d "{\"username\": \"$DOCKERHUB_USERNAME\", \"password\": \"$DOCKERHUB_TOKEN\"}" | jq -r .token)
+
+          delete_old_tags() {
+            IMAGE=$1
+            TAGS=$(curl -s "https://hub.docker.com/v2/repositories/$DOCKERHUB_USERNAME/$IMAGE/tags/?page_size=100&ordering=-last_updated" \
+              -H "Authorization: Bearer $TOKEN" | jq -r '.results[].name')
+            COUNT=0
+            for TAG in $TAGS; do
+              COUNT=$((COUNT + 1))
+              if [ $COUNT -gt 5 ]; then
+                echo "Deleting $DOCKERHUB_USERNAME/$IMAGE:$TAG"
+                curl -s -X DELETE "https://hub.docker.com/v2/repositories/$DOCKERHUB_USERNAME/$IMAGE/tags/$TAG/" \
+                  -H "Authorization: Bearer $TOKEN"
+              fi
+            done
+          }
+
+          delete_old_tags frontend-student
+          delete_old_tags backend-student

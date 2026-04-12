@@ -1,0 +1,85 @@
+● How the Terraform file builds your EKS cluster
+
+  Think of it as 5 layers, each built on top of the previous:
+
+  ---
+  Layer 1 — VPC (the private network)
+
+  Your cluster lives inside a private network 10.0.0.0/16. Nothing outside AWS can reach
+  it unless you explicitly allow it.
+
+  2 Public subnets — face the internet
+  - Have an Internet Gateway attached → traffic can go in and out freely
+  - This is where your NAT Gateways sit
+
+  2 Private subnets — hidden from the internet
+  - Worker nodes live here
+  - They can reach the internet outbound (to pull Docker images, call AWS APIs) through
+  the NAT Gateway
+  - But nothing from the internet can reach them directly
+
+  Internet
+     │
+  Internet Gateway
+     │
+  Public Subnet  ──→  NAT Gateway
+                           │
+                      Private Subnet (worker nodes live here)
+
+  ---
+  Layer 2 — Security Groups (the firewall)
+
+  Cluster SG (main_devops-cluster-sg)
+  - No inbound rules — the EKS control plane manages its own access
+  - All outbound allowed
+
+  Node SG (main_devops-node-sg)
+  - Inbound: only your laptop IP on port 22 (SSH)
+  - All outbound allowed
+  - So only you can SSH into the EC2 worker nodes
+
+  ---
+  Layer 3 — IAM Roles (permissions)
+
+  Cluster role — given to EKS itself
+  - Attached policy: AmazonEKSClusterPolicy
+  - Lets EKS manage AWS resources on your behalf (load balancers, networking, etc.)
+
+  Node group role — given to the EC2 worker nodes
+  - 4 policies attached:
+    - AmazonEKSWorkerNodePolicy — lets nodes join the cluster
+    - AmazonEKS_CNI_Policy — lets nodes manage pod networking
+    - AmazonEC2ContainerRegistryReadOnly — lets nodes pull Docker images
+    - AmazonEBSCSIDriverPolicy — lets nodes create/attach EBS volumes (for your MySQL
+  PVC)
+
+  ---
+  Layer 4 — EKS Cluster (the control plane)
+
+  - AWS manages the Kubernetes API server for you (you never see it)
+  - Placed in the private subnets
+  - Uses the cluster SG
+  - The EBS CSI driver addon is installed so Kubernetes can provision EBS volumes
+
+  ---
+  Layer 5 — Node Group (the worker nodes)
+
+  - Creates EC2 instances (t3.medium) in the private subnets
+  - Scales between 2–5 nodes, starts at 3
+  - Uses the node SG (so only you can SSH in)
+  - Uses the node group IAM role
+  - SSH key is pulled from var.ssh_key_name (defined in variables.tf)
+
+  ---
+  The full picture
+
+  Your Laptop
+      │  SSH (port 22, your IP only)
+      ▼
+  EC2 Worker Nodes (private subnet)
+      │  joined to
+      ▼
+  EKS Control Plane (AWS managed)
+      │  pulls images via NAT Gateway
+      ▼
+  Internet (Docker Hub, AWS APIs)

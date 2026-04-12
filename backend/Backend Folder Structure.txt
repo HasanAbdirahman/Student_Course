@@ -1,0 +1,239 @@
+ Backend Folder Structure
+
+  backend/
+  ├── server.js          ← Entry point
+  ├── db.js              ← MySQL connection
+  ├── logger.js          ← Logging setup
+  ├── metrics.js         ← Prometheus metrics
+  ├── db-init.sql        ← Database schema
+  ├── Dockerfile         ← How to build the container
+  ├── middleware/
+  │   └── auth.js        ← JWT protection
+  └── routes/
+      ├── auth.js        ← Register & Login
+      ├── students.js    ← CRUD for students
+      ├── courses.js     ← CRUD for courses
+      └── enrollments.js ← Enroll/unenroll students
+
+  ---
+  File by File Explanation
+
+  db.js — Database Connection
+
+  Creates a connection pool to MySQL. A pool means instead of opening/closing
+   a new connection every request, it keeps up to 10 connections open and
+  reuses them. It reads connection details from environment variables:
+  - DB_HOST → where MySQL is running (127.0.0.1 locally, mysql-service in
+  Kubernetes)
+  - DB_USER, DB_PASSWORD, DB_NAME, DB_PORT
+
+  If it can't connect on startup, the whole server crashes — intentional, so
+  you know immediately if the DB is unreachable.
+
+  ---
+  logger.js — Logging
+
+  Uses Winston to output logs in JSON format. Every log line looks like:
+  {"level":"info","message":"Server running on port 5000","timestamp":"..."}
+  JSON format is important in Kubernetes because log aggregators (like
+  CloudWatch or Loki) can parse and search structured JSON automatically.
+
+  ---
+  metrics.js — Prometheus Metrics
+
+  Sets up two counters that track every HTTP request:
+  - http_request_duration_seconds — how long each request took (a Histogram,
+  so you can see averages, percentiles)
+  - http_requests_total — total count of requests
+
+  These get exposed at GET /metrics. Prometheus scrapes this endpoint every
+  few seconds and stores the data. Grafana then reads from Prometheus to
+  build dashboards.
+
+  ---
+  middleware/auth.js — JWT Protection
+
+  This runs before any protected route. It:
+  1. Reads the Authorization: Bearer <token> header
+  2. Verifies the token using JWT_SECRET
+  3. If valid → attaches the user to req.user and calls next() (lets the
+  request continue)
+  4. If missing or invalid → returns 401 Unauthorized immediately
+
+  ---
+  server.js — The Main Entry Point
+
+  This is where everything is wired together. In order:
+
+  1. Creates the Express app
+  2. Sets up CORS — only allows requests from origins listed in
+  ALLOWED_ORIGINS. Locally that's http://localhost:3000, in Kubernetes it's
+  http://frontend-service
+  3. Adds express.json() — parses incoming JSON request bodies
+  4. Adds Morgan for HTTP request logging (feeds into Winston)
+  5. Adds the Prometheus middleware — records duration/count for every
+  request
+  6. Registers routes:
+    - /metrics — public, for Prometheus
+    - /health — public, for Kubernetes health checks
+    - /auth — public (register/login)
+    - /students, /courses, /enrollments — protected (go through
+  authMiddleware first)
+  7. Listens on port 5000
+
+  ---
+  routes/auth.js — Register & Login
+
+  POST /auth/register
+  - Validates username (not empty) and password (min 6 chars)
+  - Checks if username already exists
+  - Hashes the password with bcrypt (so plain text is never stored)
+  - Saves to users table
+
+  POST /auth/login
+  - Looks up the user by username
+  - Compares submitted password against the stored hash using bcrypt.compare
+  - If match → signs a JWT token with JWT_SECRET, expires in 8 hours
+  - Returns { token, username } to the frontend
+
+  ---
+  routes/students.js — Student CRUD
+
+  ┌────────┬───────────────┬──────────────────────────────────────────────┐
+  │ Method │      URL      │                 What it does                 │
+  ├────────┼───────────────┼──────────────────────────────────────────────┤
+  │ GET    │ /students     │ Returns all students                         │
+  ├────────┼───────────────┼──────────────────────────────────────────────┤
+  │ POST   │ /students     │ Creates a new student (validates name/email, │
+  │        │               │  checks duplicate email)                     │
+  ├────────┼───────────────┼──────────────────────────────────────────────┤
+  │ PUT    │ /students/:id │ Updates name/email by ID                     │
+  ├────────┼───────────────┼──────────────────────────────────────────────┤
+  │ DELETE │ /students/:id │ Deletes student by ID                        │
+  └────────┴───────────────┴──────────────────────────────────────────────┘
+
+  All guarded by the auth middleware. Uses parameterized queries (?) to
+  prevent SQL injection.
+
+  ---
+  routes/courses.js — Course CRUD
+
+  Same pattern as students:
+
+  ┌────────┬──────────────┬───────────────────────────────────────────────┐
+  │ Method │     URL      │                 What it does                  │
+  ├────────┼──────────────┼───────────────────────────────────────────────┤
+  │ GET    │ /courses     │ Returns all courses                           │
+  ├────────┼──────────────┼───────────────────────────────────────────────┤
+  │ POST   │ /courses     │ Creates course (validates title, credits      │
+  │        │              │ 1–20)                                         │
+  ├────────┼──────────────┼───────────────────────────────────────────────┤
+  │ PUT    │ /courses/:id │ Updates course                                │
+  ├────────┼──────────────┼───────────────────────────────────────────────┤
+  │ DELETE │ /courses/:id │ Deletes course                                │
+  └────────┴──────────────┴───────────────────────────────────────────────┘
+
+  ---
+  routes/enrollments.js — Enrollments
+
+  ┌────────┬─────────────────────────┬────────────────────────────────────┐
+  │ Method │           URL           │            What it does            │
+  ├────────┼─────────────────────────┼────────────────────────────────────┤
+  │        │                         │ Enrolls a student in a course      │
+  │ POST   │ /enrollments            │ (checks both exist, prevents       │
+  │        │                         │ duplicates)                        │
+  ├────────┼─────────────────────────┼────────────────────────────────────┤
+  │ GET    │ /enrollments/:studentId │ Returns all courses a student is   │
+  │        │                         │ enrolled in (SQL JOIN)             │
+  ├────────┼─────────────────────────┼────────────────────────────────────┤
+  │ DELETE │ /enrollments            │ Removes an enrollment by           │
+  │        │                         │ student_id + course_id             │
+  └────────┴─────────────────────────┴────────────────────────────────────┘
+
+  ---
+  db-init.sql — Database Schema
+
+  Creates 4 tables:
+  - users — stores login accounts (hashed passwords)
+  - students — student records (name, email)
+  - courses — course records (title, credits)
+  - enrollments — links students to courses. Has a unique constraint on
+  (student_id, course_id) so a student can't be enrolled in the same course
+  twice
+
+  ---
+  Dockerfile — How to Build the Container
+
+  FROM node:18-alpine        # Small Linux image with Node.js
+  RUN apk upgrade            # Security patches
+  WORKDIR /app
+  COPY package.json ...
+  RUN npm install --production  # Only install production deps (no dev tools)
+  COPY . .
+  ENV PORT=5000
+  EXPOSE 5000
+  CMD ["node", "server.js"]  # Start the server
+
+  ---
+  How the Frontend Talks to the Backend
+
+  User clicks "Add Student"
+          ↓
+  React (frontend/src/components/StudentForm.js)
+          ↓
+  axios POST via api.js (attaches JWT token from localStorage)
+          ↓
+  Backend: authMiddleware checks token
+          ↓
+  routes/students.js validates + inserts into MySQL
+          ↓
+  Returns 201 → frontend refreshes the list
+
+  The frontend never talks to MySQL directly — everything goes through the
+  backend API.
+
+  ---
+  How the Backend Lives in Kubernetes
+
+  k8s/backend/
+  ├── deployment.yaml       ← Runs the backend container
+  ├── service.yaml          ← Exposes it inside the cluster
+  ├── mysql-statefulset.yaml ← Runs MySQL
+  ├── mysql-service.yaml    ← Exposes MySQL inside the cluster
+  └── mysql-pvc.yaml        ← Reserves 5GB disk for MySQL data
+
+  deployment.yaml — tells Kubernetes to run 1 copy of the backend Docker
+  image. Injects all secrets (DB password, JWT secret) as environment
+  variables from mysql-secret. Has two health checks:
+  - readinessProbe — Kubernetes won't send traffic until /health returns OK
+  - livenessProbe — if /health fails, Kubernetes restarts the pod
+
+  service.yaml — gives the backend a stable internal name backend-service.
+  Other pods reach it at http://backend-service. Maps port 80 → 5000 inside
+  the container.
+
+  mysql-statefulset.yaml — runs MySQL as a StatefulSet (not a regular
+  Deployment) because MySQL needs a stable identity and persistent storage.
+  Uses a volumeClaimTemplate to automatically claim a 5Gi EBS disk.
+
+  mysql-service.yaml — a headless service (clusterIP: None) that gives MySQL
+  a stable DNS name (mysql) so the backend can connect to it via
+  DB_HOST=mysql-service.
+
+  mysql-pvc.yaml — the disk reservation. Uses gp3 storage class which is AWS
+  EBS SSD. This is what survives pod restarts — if MySQL crashes, data is
+  still on the disk.
+
+  ---
+  The Full Flow in Kubernetes
+
+  Browser
+    → frontend pod (Nginx serving React)
+      → HTTP request to http://backend-service
+        → backend pod (Node.js)
+          → mysql pod (MySQL StatefulSet)
+            → EBS disk (persistent data)
+
+  And for monitoring:
+  Prometheus → scrapes GET /metrics on backend pod
+  Grafana    → reads from Prometheus → shows dashboards

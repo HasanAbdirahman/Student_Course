@@ -1,0 +1,163 @@
+ Monitoring — How to Think About It & Write It
+
+  The mental model (always start here)
+
+           Your App → exposes /metrics
+                ↓
+           ServiceMonitor → tells Prometheus where to scrape
+                ↓
+           Prometheus → collects & evaluates rules
+                ↓
+           PrometheusRule → defines what counts as a problem
+                ↓
+           Alertmanager → decides who gets notified & how
+                ↓
+           Grafana → visualizes everything
+
+  Everything flows in that order. When writing monitoring from
+  scratch, write in that same order.
+
+  ---
+  Step 1 — Does your app actually expose metrics?
+
+  Your backend already has this done in backend/metrics.js and
+  backend/server.js using prom-client. It exposes:
+
+    - http_request_duration_seconds (histogram per method/route/status)
+    - http_requests_total (counter per method/route/status)
+    - Default Node.js metrics: CPU, memory, event loop lag
+
+  The /metrics endpoint is intentionally public (no auth middleware)
+  so Prometheus can scrape it without a token.
+
+  Also your backend Kubernetes Service (k8s/backend/service.yaml)
+  already has a named port:
+
+    ports:
+      - name: http        ← this name is required
+        port: 80
+        targetPort: 5000
+
+  The name: http must match port: http in servicemonitor.yaml.
+  If the port has no name, the ServiceMonitor will not work.
+
+  ---
+  Step 2 — Install the stack first (Helm)
+
+  helm repo add prometheus-community
+  https://prometheus-community.github.io/helm-charts
+  helm repo update
+
+  Grafana Password — use a Kubernetes Secret (Option A — what your
+  file does):
+
+  # Run this ONCE before helm install — stores password in the cluster
+  kubectl create secret generic grafana-admin-secret \
+    --namespace monitoring \
+    --from-literal=admin-password='YourStrongPassword123'
+
+  Your helm-values.yaml already references it with:
+    grafana:
+      admin:
+        existingSecret: grafana-admin-secret
+        passwordKey: admin-password
+
+  Grafana reads the password from that secret automatically.
+  Never put the real password in the file — it gets committed to git.
+
+  Gmail App Password — how to get it and use it correctly:
+
+    1. Go to: myaccount.google.com/apppasswords
+    2. Type a name e.g. "AlertManager" → click Create
+    3. Google gives you 16 chars like: abcd efgh ijkl mnop
+    4. Copy it WITHOUT spaces → abcdefghijklmnop
+    5. Save it in a password manager — Google only shows it once
+
+  DO NOT paste it into helm-values.yaml — that file is in git.
+  Pass it via --set when running helm instead (see command below).
+
+  Full helm install command:
+
+  helm upgrade --install kube-prometheus-stack \
+    prometheus-community/kube-prometheus-stack \
+    --namespace monitoring --create-namespace \
+    -f k8s/monitoring/helm-values.yaml \
+    --set alertmanager.config.global.smtp_auth_password="abcdefghijklmnop"
+
+  The --set flag injects the password at deploy time without
+  touching the file or git.
+
+  If you accidentally committed the real password:
+    1. Go to myaccount.google.com/apppasswords and DELETE it
+    2. Generate a new one following the steps above
+    3. Use the new one in the helm command
+
+  ---
+  Step 3 — Apply the Kubernetes manifests
+
+  # ServiceMonitor — tells Prometheus to scrape your backend
+  kubectl apply -f k8s/monitoring/servicemonitor.yaml
+
+  # Alert rules — defines what triggers an alert
+  kubectl apply -f k8s/monitoring/alertmanager-rules.yaml
+
+  ---
+  Step 4 — Verify everything is working
+
+  # Check Prometheus picked up your ServiceMonitor
+  kubectl port-forward -n monitoring \
+    svc/kube-prometheus-stack-prometheus 9090:9090
+  # Open http://localhost:9090 → Status → Targets → look for "backend"
+
+  # Check alert rules loaded
+  # http://localhost:9090 → Alerts → should see your 4 rules
+
+  # Access Grafana
+  kubectl port-forward -n monitoring \
+    svc/kube-prometheus-stack-grafana 3001:80
+  # Open http://localhost:3001 → admin / YourStrongPassword123
+
+  ---
+  Key rules to remember when writing these files
+
+  ┌─────────────────────────┬─────────────────────────────────────┐
+  │          File           │       Key thing to get right        │
+  ├─────────────────────────┼─────────────────────────────────────┤
+  │                         │ release: kube-prometheus-stack      │
+  │ helm-values.yaml        │ label must match your Helm release  │
+  │                         │ name everywhere                     │
+  ├─────────────────────────┼─────────────────────────────────────┤
+  │                         │ namespaceSelector must match where  │
+  │ servicemonitor.yaml     │ your pod lives (backend),           │
+  │                         │ matchLabels must match your         │
+  │                         │ Service's labels, port: http must   │
+  │                         │ match the named port on the Service │
+  ├─────────────────────────┼─────────────────────────────────────┤
+  │                         │ labels: release:                    │
+  │ alertmanager-rules.yaml │ kube-prometheus-stack must be       │
+  │                         │ present or Prometheus ignores the   │
+  │                         │ file                                │
+  ├─────────────────────────┼─────────────────────────────────────┤
+  │                         │ Grafana → kubectl create secret     │
+  │ Credentials             │ Gmail App Password → --set at helm  │
+  │                         │ deploy time. Never hardcode either  │
+  └─────────────────────────┴─────────────────────────────────────┘
+
+  ---
+  What the 4 alert rules in your file do
+
+  ┌─────────────────┬─────────────────────────────────┬──────────┐
+  │      Alert      │          Triggers when          │ Severity │
+  ├─────────────────┼─────────────────────────────────┼──────────┤
+  │ PodCrashLooping │ Pod restarts >3 times in 15 min │ critical │
+  ├─────────────────┼─────────────────────────────────┼──────────┤
+  │ PodNotReady     │ Pod not ready for >2 min        │ warning  │
+  ├─────────────────┼─────────────────────────────────┼──────────┤
+  │ HighErrorRate   │ >5% of requests return 5xx      │ critical │
+  ├─────────────────┼─────────────────────────────────┼──────────┤
+  │ HighLatency     │ p95 response time >2 seconds    │ warning  │
+  └─────────────────┴─────────────────────────────────┴──────────┘
+
+  Critical → you get an email immediately. Warning → still emails
+  but lower urgency. Both send a follow-up email when the issue
+  resolves (send_resolved: true).
