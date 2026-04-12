@@ -36,13 +36,13 @@ jobs:
       - name: Run backend tests
         run: |
           cd backend
-          npm ci
+          npm install
           npm test
 
       - name: Run frontend tests
         run: |
           cd frontend
-          npm ci
+          npm install
           npm test -- --watchAll=false --passWithNoTests
 
   # ────────────────────────────────────────────────
