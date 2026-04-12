@@ -3,6 +3,7 @@ import API from "../api";
 import "./Course.css";
 
 export default function CourseForm() {
+  const currentUserId = Number(localStorage.getItem("userId"));
   const [courses, setCourses] = useState([]);
   const [title, setTitle] = useState("");
   const [credits, setCredits] = useState("");
@@ -111,14 +112,16 @@ export default function CourseForm() {
               <strong>{c.title}</strong>
               <p>{c.credits} credits</p>
             </div>
-            <div className="actions">
-              <button className="edit" onClick={() => editCourse(c)}>
-                Edit
-              </button>
-              <button className="delete" onClick={() => deleteCourse(c.id)}>
-                Delete
-              </button>
-            </div>
+            {c.user_id === currentUserId && (
+              <div className="actions">
+                <button className="edit" onClick={() => editCourse(c)}>
+                  Edit
+                </button>
+                <button className="delete" onClick={() => deleteCourse(c.id)}>
+                  Delete
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>

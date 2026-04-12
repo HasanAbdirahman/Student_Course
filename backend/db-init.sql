@@ -20,7 +20,9 @@ CREATE TABLE IF NOT EXISTS students (
 CREATE TABLE IF NOT EXISTS courses (
   id      INT AUTO_INCREMENT PRIMARY KEY,
   title   VARCHAR(255) NOT NULL,
-  credits INT          NOT NULL
+  credits INT          NOT NULL,
+  user_id INT,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS enrollments (

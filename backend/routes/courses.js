@@ -34,8 +34,8 @@ router.post("/", async (req, res, next) => {
     if (error) return res.status(400).json({ message: error });
 
     await db.query(
-      "INSERT INTO courses (title, credits) VALUES (?, ?)",
-      [title.trim(), Number(credits)]
+      "INSERT INTO courses (title, credits, user_id) VALUES (?, ?, ?)",
+      [title.trim(), Number(credits), req.user.id]
     );
     res.sendStatus(201);
   } catch (err) {
@@ -52,13 +52,16 @@ router.put("/:id", async (req, res, next) => {
     const error = validate(title, credits);
     if (error) return res.status(400).json({ message: error });
 
-    const [result] = await db.query(
+    const [rows] = await db.query("SELECT user_id FROM courses WHERE id = ?", [id]);
+    if (rows.length === 0) return res.status(404).json({ message: "Course not found" });
+    if (rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ message: "You can only edit your own courses" });
+    }
+
+    await db.query(
       "UPDATE courses SET title = ?, credits = ? WHERE id = ?",
       [title.trim(), Number(credits), id]
     );
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "Course not found" });
-    }
     res.sendStatus(200);
   } catch (err) {
     next(err);
@@ -69,10 +72,14 @@ router.put("/:id", async (req, res, next) => {
 router.delete("/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
-    const [result] = await db.query("DELETE FROM courses WHERE id = ?", [id]);
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "Course not found" });
+
+    const [rows] = await db.query("SELECT user_id FROM courses WHERE id = ?", [id]);
+    if (rows.length === 0) return res.status(404).json({ message: "Course not found" });
+    if (rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ message: "You can only delete your own courses" });
     }
+
+    await db.query("DELETE FROM courses WHERE id = ?", [id]);
     res.sendStatus(204);
   } catch (err) {
     next(err);
