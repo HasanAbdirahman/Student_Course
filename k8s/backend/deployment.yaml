@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: hasanabdirahman/backend-student:9bf9a8d34add384cfd8d5b565f1e37f5e2a72732
+          image: hasanabdirahman/backend-student:1f5926bb814bfe31cf651ed539e5ca89e7f6f219
           imagePullPolicy: Always
           ports:
             - containerPort: 5000
