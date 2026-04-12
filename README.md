@@ -249,6 +249,7 @@ stringData:
   MYSQL_USER: your_db_user
   MYSQL_PASSWORD: your_db_password
   MYSQL_DATABASE: university_db
+  JWT_SECRET: paste_the_generated_value_here
 ```
 
 ```bash
