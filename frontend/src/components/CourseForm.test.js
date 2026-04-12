@@ -18,12 +18,13 @@ describe("CourseForm component", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
-    localStorage.setItem("userId", "1"); // logged in as user 1
+    localStorage.setItem("userId", "1");
     API.get.mockResolvedValue({ data: mockCourses });
   });
 
   it("renders the add course form", async () => {
     render(<CourseForm />);
+    await screen.findByText("Math"); // wait for initial fetch to settle
     expect(screen.getByPlaceholderText("Course Title")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Credits")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /add/i })).toBeInTheDocument();
@@ -31,15 +32,13 @@ describe("CourseForm component", () => {
 
   it("displays all courses", async () => {
     render(<CourseForm />);
-    await waitFor(() => {
-      expect(screen.getByText("Math")).toBeInTheDocument();
-      expect(screen.getByText("Physics")).toBeInTheDocument();
-    });
+    expect(await screen.findByText("Math")).toBeInTheDocument();
+    expect(screen.getByText("Physics")).toBeInTheDocument();
   });
 
   it("shows edit and delete only for the logged-in user's own courses", async () => {
     render(<CourseForm />);
-    await waitFor(() => screen.getByText("Math"));
+    await screen.findByText("Math");
 
     const editButtons = screen.getAllByRole("button", { name: /edit/i });
     const deleteButtons = screen.getAllByRole("button", { name: /delete/i });
@@ -51,18 +50,19 @@ describe("CourseForm component", () => {
 
   it("populates form when edit is clicked", async () => {
     render(<CourseForm />);
-    await waitFor(() => screen.getByText("Math"));
+    await screen.findByText("Math");
 
     fireEvent.click(screen.getByRole("button", { name: /edit/i }));
 
     expect(screen.getByPlaceholderText("Course Title").value).toBe("Math");
-    expect(screen.getByPlaceholderText("Credits").value).toBe("3");
+    expect(Number(screen.getByPlaceholderText("Credits").value)).toBe(3);
   });
 
   it("submits a new course", async () => {
     API.post.mockResolvedValueOnce({});
-
     render(<CourseForm />);
+    await screen.findByText("Math");
+
     fireEvent.change(screen.getByPlaceholderText("Course Title"), { target: { value: "Chemistry" } });
     fireEvent.change(screen.getByPlaceholderText("Credits"), { target: { value: "3" } });
     fireEvent.click(screen.getByRole("button", { name: /add/i }));
@@ -81,12 +81,12 @@ describe("CourseForm component", () => {
     });
 
     render(<CourseForm />);
+    await screen.findByText("Math");
+
     fireEvent.change(screen.getByPlaceholderText("Course Title"), { target: { value: "Math" } });
     fireEvent.change(screen.getByPlaceholderText("Credits"), { target: { value: "3" } });
     fireEvent.click(screen.getByRole("button", { name: /add/i }));
 
-    await waitFor(() => {
-      expect(screen.getByText("Something went wrong. Please try again.")).toBeInTheDocument();
-    });
+    expect(await screen.findByText("Something went wrong. Please try again.")).toBeInTheDocument();
   });
 });

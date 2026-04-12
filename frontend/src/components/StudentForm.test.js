@@ -18,12 +18,13 @@ describe("StudentForm component", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
-    localStorage.setItem("userId", "1"); // logged in as user 1
+    localStorage.setItem("userId", "1");
     API.get.mockResolvedValue({ data: mockStudents });
   });
 
   it("renders the add student form", async () => {
     render(<StudentForm />);
+    await screen.findByText("Alice"); // wait for initial fetch to settle
     expect(screen.getByPlaceholderText("Name")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Email")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /add/i })).toBeInTheDocument();
@@ -31,15 +32,13 @@ describe("StudentForm component", () => {
 
   it("displays all students", async () => {
     render(<StudentForm />);
-    await waitFor(() => {
-      expect(screen.getByText("Alice")).toBeInTheDocument();
-      expect(screen.getByText("Bob")).toBeInTheDocument();
-    });
+    expect(await screen.findByText("Alice")).toBeInTheDocument();
+    expect(screen.getByText("Bob")).toBeInTheDocument();
   });
 
   it("shows edit and delete only for the logged-in user's own record", async () => {
     render(<StudentForm />);
-    await waitFor(() => screen.getByText("Alice"));
+    await screen.findByText("Alice");
 
     const editButtons = screen.getAllByRole("button", { name: /edit/i });
     const deleteButtons = screen.getAllByRole("button", { name: /delete/i });
@@ -51,7 +50,7 @@ describe("StudentForm component", () => {
 
   it("populates form when edit is clicked", async () => {
     render(<StudentForm />);
-    await waitFor(() => screen.getByText("Alice"));
+    await screen.findByText("Alice");
 
     fireEvent.click(screen.getByRole("button", { name: /edit/i }));
 
@@ -61,8 +60,9 @@ describe("StudentForm component", () => {
 
   it("submits a new student", async () => {
     API.post.mockResolvedValueOnce({});
-
     render(<StudentForm />);
+    await screen.findByText("Alice");
+
     fireEvent.change(screen.getByPlaceholderText("Name"), { target: { value: "Carol" } });
     fireEvent.change(screen.getByPlaceholderText("Email"), { target: { value: "carol@test.com" } });
     fireEvent.click(screen.getByRole("button", { name: /add/i }));
@@ -81,12 +81,12 @@ describe("StudentForm component", () => {
     });
 
     render(<StudentForm />);
+    await screen.findByText("Alice");
+
     fireEvent.change(screen.getByPlaceholderText("Name"), { target: { value: "Alice" } });
     fireEvent.change(screen.getByPlaceholderText("Email"), { target: { value: "alice@test.com" } });
     fireEvent.click(screen.getByRole("button", { name: /add/i }));
 
-    await waitFor(() => {
-      expect(screen.getByText("A student with this email already exists")).toBeInTheDocument();
-    });
+    expect(await screen.findByText("A student with this email already exists")).toBeInTheDocument();
   });
 });
