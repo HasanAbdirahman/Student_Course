@@ -21,6 +21,7 @@
   4. Start backend (Terminal 1)
 
   cd backend
+  npm install
   ALLOWED_ORIGINS=https://${CODESPACE_NAME}-3000.app.github.dev \
   JWT_SECRET=any_local_secret \
   node server.js
@@ -28,6 +29,7 @@
   5. Start frontend (Terminal 2)
 
   cd frontend
+  npm install
   export REACT_APP_API_URL=https://${CODESPACE_NAME}-5000.app.github.dev
   npm start
 
