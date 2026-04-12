@@ -2,7 +2,12 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import Login from "./Login";
 import API from "../api";
 
-jest.mock("../api");
+jest.mock("../api", () => ({
+  get: jest.fn(),
+  post: jest.fn(),
+  put: jest.fn(),
+  delete: jest.fn(),
+}));
 
 describe("Login component", () => {
   beforeEach(() => {

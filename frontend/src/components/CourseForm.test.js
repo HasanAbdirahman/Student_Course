@@ -2,7 +2,12 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import CourseForm from "./CourseForm";
 import API from "../api";
 
-jest.mock("../api");
+jest.mock("../api", () => ({
+  get: jest.fn(),
+  post: jest.fn(),
+  put: jest.fn(),
+  delete: jest.fn(),
+}));
 
 const mockCourses = [
   { id: 1, title: "Math",    credits: 3, user_id: 1 },

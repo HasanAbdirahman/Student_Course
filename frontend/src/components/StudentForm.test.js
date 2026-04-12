@@ -2,7 +2,12 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import StudentForm from "./StudentForm";
 import API from "../api";
 
-jest.mock("../api");
+jest.mock("../api", () => ({
+  get: jest.fn(),
+  post: jest.fn(),
+  put: jest.fn(),
+  delete: jest.fn(),
+}));
 
 const mockStudents = [
   { id: 1, name: "Alice", email: "alice@test.com", user_id: 1 },

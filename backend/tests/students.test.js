@@ -2,7 +2,7 @@ const request = require("supertest");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 
-jest.mock("../db");
+jest.mock("../db", () => ({ query: jest.fn() }));
 jest.mock("../logger", () => ({ info: jest.fn(), error: jest.fn() }));
 
 const db = require("../db");
