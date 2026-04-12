@@ -307,7 +307,7 @@ kubectl apply -f k8s/monitoring/alertmanager-rules.yaml
 | `HighErrorRate` | 5xx rate > 5% over 5 min |
 | `HighLatency` | p95 latency > 2 seconds over 3 min |
 
-To receive alerts via Slack, uncomment and configure the Slack receiver in `k8s/monitoring/helm-values.yaml`.
+Alerts are received via Email. You can use receive an alert via Slack too and need to update the `k8s/monitoring/helm-values.yaml`.
 
 ---
 
