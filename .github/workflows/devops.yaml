@@ -18,10 +18,39 @@ env:
 
 jobs:
   # ────────────────────────────────────────────────
-  # 1. BUILD → SCAN → PUSH
+  # 1. TEST
+  # ────────────────────────────────────────────────
+  test:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run backend tests
+        run: |
+          cd backend
+          npm ci
+          npm test
+
+      - name: Run frontend tests
+        run: |
+          cd frontend
+          npm ci
+          npm test -- --watchAll=false --passWithNoTests
+
+  # ────────────────────────────────────────────────
+  # 2. BUILD → SCAN → PUSH
   # ────────────────────────────────────────────────
   build-scan-push:
     runs-on: ubuntu-latest
+    needs: test
     if: github.actor != 'github-actions[bot]'
 
     steps:
@@ -100,7 +129,7 @@ jobs:
           git push
 
   # ────────────────────────────────────────────────
-  # 2. CLEAN UP OLD IMAGES (runs after push succeeds)
+  # 3. CLEAN UP OLD IMAGES (runs after push succeeds)
   # ────────────────────────────────────────────────
   cleanup-old-images:
     runs-on: ubuntu-latest
