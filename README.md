@@ -286,44 +286,266 @@ kubectl apply -f k8s/backend/mysql-secret.yaml
 
 ---
 
-## Monitoring & Observability
+# Monitoring & Observability
 
-### Install kube-prometheus-stack
+## Install kube-prometheus-stack
+
+### 1. Add Helm repository
 
 ```bash
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
-helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-  --namespace monitoring --create-namespace \
-  -f k8s/monitoring/helm-values.yaml
 ```
 
-### Apply monitoring manifests
+---
+
+# Configure Grafana Admin Credentials
+
+Grafana is configured to read the admin password from a Kubernetes Secret instead of storing credentials in Git.
+
+The following configuration exists in `k8s/monitoring/helm-values.yaml`:
+
+```yaml
+grafana:
+  admin:
+    existingSecret: grafana-admin-secret
+    passwordKey: admin-password
+```
+
+Before installing the chart, create the secret:
+
+```bash
+kubectl create secret generic grafana-admin-secret \
+  --namespace monitoring \
+  --from-literal=admin-password='YourStrongPassword123'
+```
+
+This creates:
+
+- Secret name: `grafana-admin-secret`
+- Secret key: `admin-password`
+
+Grafana automatically reads the password from this secret during deployment.
+
+---
+
+# Configure Email Alerts (Alertmanager)
+
+Alertmanager is configured to send email notifications through Gmail SMTP.
+
+## IMPORTANT
+
+Do NOT use your normal Gmail password.
+
+Google requires a Gmail App Password.
+
+---
+
+## Generate Gmail App Password
+
+### Step 1 — Open Google App Passwords
+
+Go to:
+
+```text
+https://myaccount.google.com/apppasswords
+```
+
+### Step 2 — Create App Password
+
+1. Enter a name such as:
+   ```text
+   AlertManager
+   ```
+2. Click **Create**
+3. Google will generate a 16-character password like:
+   ```text
+   abcd efgh ijkl mnop
+   ```
+
+### Step 3 — Copy Password Without Spaces
+
+Convert:
+
+```text
+abcd efgh ijkl mnop
+```
+
+into:
+
+```text
+abcdefghijklmnop
+```
+
+Save it securely because Google only shows it once.
+
+---
+
+# Security Warning
+
+Never paste the real Gmail App Password into:
+
+```text
+k8s/monitoring/helm-values.yaml
+```
+
+That file is committed to Git and could expose your credentials publicly.
+
+This placeholder is intentionally fake:
+
+```yaml
+smtp_auth_password: "REPLACE_WITH_GMAIL_APP_PASSWORD"
+```
+
+---
+
+# Install / Upgrade Monitoring Stack
+
+Pass the Gmail App Password securely using `--set` during deployment:
+
+```bash
+helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  --namespace monitoring --create-namespace \
+  -f k8s/monitoring/helm-values.yaml \
+  --set alertmanager.config.global.smtp_auth_password="abcdefghijklmnop"
+```
+
+This injects the real SMTP password at deploy time without storing it in Git.
+
+---
+
+# Apply Monitoring Manifests
 
 ```bash
 kubectl apply -f k8s/monitoring/servicemonitor.yaml
 kubectl apply -f k8s/monitoring/alertmanager-rules.yaml
 ```
 
-### What is monitored
+---
 
-**Structured logs** — every HTTP request and error is logged as JSON by Winston + Morgan. Readable by any log aggregator (CloudWatch, Loki, ELK).
+# What is Monitored
 
-**Metrics exposed at `/metrics`:**
-- Default Node.js metrics (CPU, memory, event loop lag)
-- `http_request_duration_seconds` — latency histogram per route
-- `http_requests_total` — request counter per route and status code
+## Structured Logs
 
-**Alert rules:**
+Every HTTP request and application error is logged as structured JSON using:
+
+- Winston
+- Morgan
+
+Compatible with log systems such as:
+
+- Loki
+- ELK Stack
+- CloudWatch
+
+---
+
+## Metrics Exposed at `/metrics`
+
+### Default Node.js Metrics
+
+- CPU usage
+- Memory usage
+- Event loop lag
+
+### Custom HTTP Metrics
+
+#### `http_request_duration_seconds`
+
+Latency histogram per route.
+
+#### `http_requests_total`
+
+Request counter grouped by:
+
+- route
+- HTTP method
+- status code
+
+---
+
+# Alert Rules
 
 | Alert | Condition |
 |---|---|
-| `PodCrashLooping` | Pod restarts > 3× in 15 min |
-| `PodNotReady` | Pod unavailable for > 2 min |
-| `HighErrorRate` | 5xx rate > 5% over 5 min |
-| `HighLatency` | p95 latency > 2 seconds over 3 min |
+| PodCrashLooping | Pod restarts > 3 times within 15 minutes |
+| PodNotReady | Pod unavailable for more than 2 minutes |
+| HighErrorRate | 5xx error rate > 5% over 5 minutes |
+| HighLatency | p95 latency > 2 seconds over 3 minutes |
 
-Alerts are received via Email. You can use receive an alert via Slack too and need to update the `k8s/monitoring/helm-values.yaml`.
+---
+
+# Alert Notifications
+
+When alerts fire:
+
+- Alertmanager sends an email notification
+- A second notification is sent automatically when the issue resolves
+
+Email recipient:
+
+```text
+hasanabdirahman1999@gmail.com
+```
+
+---
+
+# Accessing Grafana
+
+Grafana is exposed using a Kubernetes `LoadBalancer` service:
+
+```yaml
+grafana:
+  service:
+    type: LoadBalancer
+```
+
+Get the external IP:
+
+```bash
+kubectl get svc -n monitoring
+```
+
+---
+
+## Local Access Alternative
+
+For local development, change the service type to:
+
+```yaml
+type: ClusterIP
+```
+
+Then port-forward:
+
+```bash
+kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+Login credentials:
+
+```text
+Username: admin
+Password: value stored in grafana-admin-secret
+```
+
+---
+
+# If You Accidentally Expose the Gmail App Password
+
+1. Go to:
+   ```text
+   https://myaccount.google.com/apppasswords
+   ```
+2. Delete the compromised App Password
+3. Generate a new one
+4. Redeploy Helm using the new password via `--set`
 
 ---
 
